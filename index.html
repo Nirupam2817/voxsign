@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VoxSign - AI Sign Language to Speech Communicator</title>
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- Google MediaPipe Hands CDN dependencies -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="app-header">
+    <div class="logo-container">
+      <div class="logo-icon">🤟</div>
+      <div class="logo-text">
+        <h1>VoxSign AI</h1>
+        <p>Real-Time Sign Language to Speech Synthesizer</p>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <button id="btn-emergency" class="btn btn-emergency" title="Emergency Alarm & Immediate Help Voice">
+        🚨 EMERGENCY SOS
+      </button>
+
+      <button id="btn-open-guide" class="btn btn-secondary" title="View Hand Sign Dictionary">
+        📖 Sign Guide
+      </button>
+
+      <button id="btn-open-trainer" class="btn btn-secondary" title="Record Personal Signs">
+        ✨ Train Custom Sign
+      </button>
+
+      <button id="btn-open-settings" class="btn btn-secondary" title="Speech & Voice Settings">
+        ⚙️ Voice Settings
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Grid Layout -->
+  <main class="app-container">
+    
+    <!-- Left: Camera & Computer Vision Panel -->
+    <section class="vision-panel">
+      <div class="video-card">
+        
+        <div class="video-header">
+          <div class="mode-pills">
+            <button class="mode-pill active" data-mode="phrases">🗣️ Daily Needs & Phrases</button>
+            <button class="mode-pill" data-mode="alphabet">🔤 Alphabet & Numbers</button>
+            <button class="mode-pill" data-mode="custom">✨ Custom Signs</button>
+          </div>
+
+          <div id="camera-status" class="badge-status">
+            <span class="status-dot"></span> Starting camera...
+          </div>
+        </div>
+
+        <!-- Video Viewport with Canvas Overlay -->
+        <div class="video-viewport">
+          <video id="webcam-video" autoplay playsinline muted></video>
+          <canvas id="output-canvas"></canvas>
+
+          <!-- Floating Badges -->
+          <div class="camera-overlay">
+            <div id="hand-count" class="hand-badge">0 Hands</div>
+            <div id="fps-text" class="fps-counter">0 FPS</div>
+          </div>
+
+          <!-- Hold-Confirmation Ring Inside Viewport -->
+          <div id="hold-feedback" class="hold-feedback-container">
+            <div class="hold-ring-wrapper">
+              <svg class="hold-svg" viewBox="0 0 36 36">
+                <path class="hold-circle-bg"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+                <path id="hold-circle-bar" class="hold-circle-bar"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+              </svg>
+            </div>
+            <div class="hold-text-info">
+              <span id="hold-gesture-label" class="hold-gesture-label">Holding sign...</span>
+              <span class="hold-instruction">Hold still to speak</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Camera Controls & Toggles -->
+        <div class="camera-controls-bar">
+          <div class="camera-toggles">
+            <label class="toggle-item">
+              <input type="checkbox" id="toggle-skeleton" checked>
+              <span>Show Hand Skeleton</span>
+            </label>
+            <label class="toggle-item">
+              <input type="checkbox" id="toggle-autospeak" checked>
+              <span>Auto-Speak upon Recognition</span>
+            </label>
+          </div>
+
+          <button id="btn-toggle-camera" class="btn btn-secondary">
+            📷 Stop Camera
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Detected Sign Summary Card -->
+      <div class="detected-summary-card">
+        <div class="current-sign-wrapper">
+          <div id="current-sign-emoji" class="sign-emoji-large">👋</div>
+          <div class="current-sign-details">
+            <h3 id="current-sign-name">Ready for Signing</h3>
+            <p id="current-sign-desc">Position your hand in the camera frame</p>
+          </div>
+        </div>
+
+        <div class="confidence-gauge">
+          <div id="confidence-val" class="confidence-val">0%</div>
+          <div class="confidence-bar-bg">
+            <div id="confidence-bar-fill" class="confidence-bar-fill"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: Spoken Output & Conversation Hub -->
+    <section class="speech-hub">
+      
+      <!-- Big Spoken Output Banner -->
+      <div class="spoken-banner-card">
+        <div class="banner-header">
+          <div class="banner-title">
+            <span>🔊 Spoken Output (Speaker Voice)</span>
+          </div>
+
+          <!-- Animated Voice Waveforms -->
+          <div id="audio-waves" class="audio-waves">
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+          </div>
+        </div>
+
+        <!-- Caption text for deaf/hard-of-hearing partners -->
+        <div id="last-spoken-text" class="last-spoken-text empty">
+          "Sign something to speak aloud..."
+        </div>
+
+        <div class="banner-footer">
+          <div id="last-spoken-time" class="spoken-meta">Awaiting sign input</div>
+          <button id="replay-btn" class="banner-replay-btn" title="Replay voice aloud">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+            Replay Voice
+          </button>
+        </div>
+      </div>
+
+      <!-- Sentence Builder Card -->
+      <div class="builder-card">
+        <div class="card-title-row">
+          <div class="card-title">
+            <span>📝 Sentence Builder</span>
+          </div>
+          <span style="font-size:0.75rem; color:var(--text-muted);">Accumulate signs into sentences</span>
+        </div>
+
+        <div class="builder-textarea-wrapper">
+          <textarea id="sentence-display" class="sentence-display" placeholder="Recognized words and letters accumulate here... You can also type or edit directly."></textarea>
+        </div>
+
+        <div class="builder-actions">
+          <div class="builder-buttons">
+            <button id="btn-add-space" class="btn btn-secondary">Space</button>
+            <button id="btn-backspace" class="btn btn-secondary">⌫ Delete</button>
+            <button id="btn-clear-sentence" class="btn btn-secondary">Clear</button>
+          </div>
+          <button id="btn-speak-sentence" class="btn btn-primary">
+            🗣️ Speak Sentence
+          </button>
+        </div>
+      </div>
+
+      <!-- Recent History Log -->
+      <div class="history-card">
+        <div class="card-title-row">
+          <div class="card-title">
+            <span>🕒 Recent Spoken Phrases</span>
+          </div>
+        </div>
+
+        <ul id="history-list" class="history-list">
+          <li style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:12px;">
+            No speech history yet.
+          </li>
+        </ul>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Sign Reference Guide Modal -->
+  <div id="guide-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>📖 Sign Language Reference & Dictionary</h2>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+
+      <div class="guide-tabs">
+        <button class="guide-tab-btn active" data-target="guide-phrases">🗣️ Daily Needs & Emergency</button>
+        <button class="guide-tab-btn" data-target="guide-alphabet">🔤 ASL Alphabet & Numbers</button>
+      </div>
+
+      <!-- Daily Needs Guide -->
+      <div id="guide-phrases" class="guide-grid guide-section">
+        
+        <div class="guide-card">
+          <div class="guide-card-top">
+            <span class="guide-emoji">🆘</span>
+            <div>
+              <div class="guide-name">Emergency / Help</div>
+              <span class="guide-fingers">Clenched fist with thumb up</span>
+            </div>
+          </div>
+          <p class="guide-desc">Hold a fist with thumb pointing upwards or raise open hand. Triggers urgent emergency request.</p>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-card-top">
+            <span class="guide-emoji">💧</span>
+            <div>
+              <div class="guide-name">Water</div>
+              <span class="guide-fingers">ASL 'W' handshape</span>
+            </div>
+          </div>
+          <p class="guide-desc">Extend index, middle, and ring fingers straight up in a 'W' shape. Speaks: "I need water, please".</p>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-card-top">
+            <span class="guide-emoji">🍽️</span>
+            <div>
+              <div class="guide-name">Food / Hungry</div>
+              <span class="guide-fingers">All fingertips pinched together</span>
+            </div>
+          </div>
+          <p class="guide-desc">Bring all 5 fingertips together into a cup/pinched eating shape. Speaks: "I am hungry, I want food".</p>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-card-top">
+            <span class="guide-emoji">🚽</span>
+            <div>
+              <div class="guide-name">Restroom</div>
+              <span class="guide-fingers">ASL 'T' handshape</span>
+            </div>
+          </div>
+          <p class="guide-desc">Thumb tucked under folded index finger. Speaks: "I need to use the restroom".</p>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-card-top">
+            <span class="guide-emoji">❤️</span>
+            <div>
+              <div class="guide-name">I Love You</div>
+              <span class="guide-fingers">Thumb + Index + Pinky up</span>
+            </div>
+          </div>
+          <p class="guide-desc">Extend thumb, index, and pinky fingers while middle and ring fingers stay curled down.</p>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-card-top">
+            <span class="guide-emoji">👍</span>
+            <div>
+              <div class="guide-name">Yes / Agree</div>
+              <span class="guide-fingers">Thumbs Up</span>
+            </div>
+          </div>
+          <p class="guide-desc">Close fist with thumb pointing straight upwards. Speaks: "Yes, I agree".</p>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-card-top">
+            <span class="guide-emoji">👎</span>
+            <div>
+              <div class="guide-name">No / Disagree</div>
+              <span class="guide-fingers">Thumbs Down</span>
+            </div>
+          </div>
+          <p class="guide-desc">Close fist with thumb pointing downwards. Speaks: "No, I disagree".</p>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-card-top">
+            <span class="guide-emoji">👋</span>
+            <div>
+              <div class="guide-name">Hello / Greetings</div>
+              <span class="guide-fingers">Open hand fingers spread</span>
+            </div>
+          </div>
+          <p class="guide-desc">Hold open hand with fingers spread comfortably. Speaks: "Hello! Good to see you".</p>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-card-top">
+            <span class="guide-emoji">✋</span>
+            <div>
+              <div class="guide-name">Stop / Wait</div>
+              <span class="guide-fingers">Flat palm facing forward</span>
+            </div>
+          </div>
+          <p class="guide-desc">Flat hand with 5 fingers held together pointing straight up. Speaks: "Please stop and wait".</p>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-card-top">
+            <span class="guide-emoji">👌</span>
+            <div>
+              <div class="guide-name">OK / Good</div>
+              <span class="guide-fingers">Thumb + Index touching</span>
+            </div>
+          </div>
+          <p class="guide-desc">Thumb and index fingertip touch in a circle; middle, ring, pinky extended up.</p>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-card-top">
+            <span class="guide-emoji">🤙</span>
+            <div>
+              <div class="guide-name">Call Someone / Phone</div>
+              <span class="guide-fingers">Thumb and Pinky out</span>
+            </div>
+          </div>
+          <p class="guide-desc">Extend thumb and pinky wide (shaka), middle three fingers folded down.</p>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-card-top">
+            <span class="guide-emoji">✌️</span>
+            <div>
+              <div class="guide-name">Peace / Two</div>
+              <span class="guide-fingers">Index + Middle spread in V</span>
+            </div>
+          </div>
+          <p class="guide-desc">Index and middle finger extended in a 'V' shape.</p>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-card-top">
+            <span class="guide-emoji">☝️</span>
+            <div>
+              <div class="guide-name">Look / Attention</div>
+              <span class="guide-fingers">Index finger up</span>
+            </div>
+          </div>
+          <p class="guide-desc">Point index finger straight up. Speaks: "Please look here".</p>
+        </div>
+
+        <div class="guide-card">
+          <div class="guide-card-top">
+            <span class="guide-emoji">🩺</span>
+            <div>
+              <div class="guide-name">Doctor / Medical</div>
+              <span class="guide-fingers">Two fingers pointing down</span>
+            </div>
+          </div>
+          <p class="guide-desc">Index and middle pointing down towards wrist. Speaks: "I need a doctor or medicine".</p>
+        </div>
+
+      </div>
+
+      <!-- Alphabet & Numbers Guide -->
+      <div id="guide-alphabet" class="guide-grid guide-section" style="display:none;">
+        <div class="guide-card">
+          <div class="guide-card-top"><span class="guide-emoji">🅰️</span><div class="guide-name">Letter A</div></div>
+          <p class="guide-desc">Fist with thumb resting alongside index finger.</p>
+        </div>
+        <div class="guide-card">
+          <div class="guide-card-top"><span class="guide-emoji">🅱️</span><div class="guide-name">Letter B</div></div>
+          <p class="guide-desc">4 fingers straight up together, thumb folded across palm.</p>
+        </div>
+        <div class="guide-card">
+          <div class="guide-card-top"><span class="guide-emoji">🅲</span><div class="guide-name">Letter C</div></div>
+          <p class="guide-desc">Curved fingers and thumb forming a 'C' shape.</p>
+        </div>
+        <div class="guide-card">
+          <div class="guide-card-top"><span class="guide-emoji">🅳</span><div class="guide-name">Letter D</div></div>
+          <p class="guide-desc">Index finger straight up, thumb touching middle, ring, pinky tips.</p>
+        </div>
+        <div class="guide-card">
+          <div class="guide-card-top"><span class="guide-emoji">🅵</span><div class="guide-name">Letter F</div></div>
+          <p class="guide-desc">Thumb and index touching in circle, other 3 fingers up.</p>
+        </div>
+        <div class="guide-card">
+          <div class="guide-card-top"><span class="guide-emoji">🅸</span><div class="guide-name">Letter I</div></div>
+          <p class="guide-desc">Pinky pointing straight up, all others curled into fist.</p>
+        </div>
+        <div class="guide-card">
+          <div class="guide-card-top"><span class="guide-emoji">🅻</span><div class="guide-name">Letter L</div></div>
+          <p class="guide-desc">Index up, thumb extended sideways forming an 'L'.</p>
+        </div>
+        <div class="guide-card">
+          <div class="guide-card-top"><span class="guide-emoji">🆄</span><div class="guide-name">Letter U</div></div>
+          <p class="guide-desc">Index and middle pointing up, touching side-by-side.</p>
+        </div>
+        <div class="guide-card">
+          <div class="guide-card-top"><span class="guide-emoji">🆅</span><div class="guide-name">Letter V</div></div>
+          <p class="guide-desc">Index and middle pointing up, spread apart in 'V'.</p>
+        </div>
+        <div class="guide-card">
+          <div class="guide-card-top"><span class="guide-emoji">🆆</span><div class="guide-name">Letter W</div></div>
+          <p class="guide-desc">Index, middle, and ring pointing up spread apart.</p>
+        </div>
+        <div class="guide-card">
+          <div class="guide-card-top"><span class="guide-emoji">🆈</span><div class="guide-name">Letter Y</div></div>
+          <p class="guide-desc">Thumb and pinky extended, other 3 folded down.</p>
+        </div>
+        <div class="guide-card">
+          <div class="guide-card-top"><span class="guide-emoji">1️⃣</span><div class="guide-name">Number 1 to 5</div></div>
+          <p class="guide-desc">1: Index up. 2: Index + Middle. 3: Thumb + Index + Middle. 4: Four fingers. 5: All five.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Custom Sign Trainer Modal -->
+  <div id="trainer-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>✨ Custom Sign Language Trainer</h2>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+
+      <div class="trainer-step">
+        <p style="font-size:0.88rem; color:var(--text-secondary); line-height:1.5;">
+          Train VoxSign to recognize your own unique hand gestures! Set a sign name and the sentence you want the computer speaker to say whenever you make that gesture.
+        </p>
+
+        <div class="setting-row">
+          <label for="custom-name-input">Gesture Name:</label>
+          <input type="text" id="custom-name-input" placeholder="e.g. Need Medicine, My Name is Sam">
+        </div>
+
+        <div class="setting-row">
+          <label for="custom-phrase-input">Spoken Phrase (Speaker will say this):</label>
+          <input type="text" id="custom-phrase-input" placeholder="e.g. Please bring my allergy medicine from the drawer">
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+          <span id="train-status-text" style="font-size:0.85rem; color:var(--accent-cyan); font-weight:600;">
+            Position hand in camera frame, then click Record
+          </span>
+          <button id="start-train-btn" class="btn btn-primary">
+            🔴 Record Gesture (3s)
+          </button>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <label style="font-weight:700; font-size:0.95rem;">Your Saved Custom Signs</label>
+        <div id="custom-signs-list">
+          <p style="color:var(--text-muted); font-size:0.85rem;">No custom gestures saved yet.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Voice & Audio Settings Modal -->
+  <div id="settings-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>⚙️ Speech & Voice Settings</h2>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+
+      <div class="settings-group">
+        
+        <div class="setting-row">
+          <label for="voice-select">Speaker Voice:</label>
+          <select id="voice-select"></select>
+        </div>
+
+        <div class="setting-row">
+          <div style="display:flex; justify-content:space-between;">
+            <label for="rate-range">Speaking Rate (Speed):</label>
+            <span id="rate-val" class="slider-val">1.0x</span>
+          </div>
+          <input type="range" id="rate-range" min="0.5" max="2.0" step="0.1" value="1.0">
+        </div>
+
+        <div class="setting-row">
+          <div style="display:flex; justify-content:space-between;">
+            <label for="pitch-range">Voice Pitch:</label>
+            <span id="pitch-val" class="slider-val">1.0x</span>
+          </div>
+          <input type="range" id="pitch-range" min="0.5" max="2.0" step="0.1" value="1.0">
+        </div>
+
+        <div class="setting-row">
+          <div style="display:flex; justify-content:space-between;">
+            <label for="volume-range">Speaker Volume:</label>
+            <span id="volume-val" class="slider-val">100%</span>
+          </div>
+          <input type="range" id="volume-range" min="0" max="1" step="0.05" value="1.0">
+        </div>
+
+        <div class="setting-row">
+          <div style="display:flex; justify-content:space-between;">
+            <label for="hold-speed-range">Gesture Hold Confirmation Time:</label>
+            <span id="hold-speed-val" class="slider-val">0.7s</span>
+          </div>
+          <input type="range" id="hold-speed-range" min="400" max="1800" step="100" value="700">
+          <span style="font-size:0.75rem; color:var(--text-muted);">How long you must hold a sign before the speaker announces it.</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notifications Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <p>VoxSign Assistive Technology &bull; Empowering communication through computer vision & speech synthesis</p>
+  </footer>
+
+  <!-- Application Scripts -->
+  <script src="js/speech-engine.js"></script>
+  <script src="js/gesture-classifier.js"></script>
+  <script src="js/custom-trainer.js"></script>
+  <script src="js/hand-detector.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
